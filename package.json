@@ -1,0 +1,25 @@
+{
+  "name": "bract",
+  "version": "1.0.0",
+  "description": "A simple implementation of React referred by https://pomb.us/build-your-own-react/",
+  "main": "bract.js",
+  "scripts": {
+    "build": "npx babel bract.js -o index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TomisTony/Bract.git"
+  },
+  "author": "Br",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/TomisTony/Bract/issues"
+  },
+  "homepage": "https://github.com/TomisTony/Bract#readme",
+  "devDependencies": {
+    "@babel/cli": "^7.22.9",
+    "@babel/core": "^7.22.9",
+    "@babel/preset-env": "^7.22.9",
+    "@babel/preset-react": "^7.22.5"
+  }
+}
