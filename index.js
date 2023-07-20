@@ -28,12 +28,34 @@ function createTextElement(text) {
     }
   };
 }
+function render(element, container) {
+  var dom = element.type === "TEXT_ELEMENT" ? document.createTextNode("") // nodeValue 会在下方和其他 props 统一注入
+  : document.createElement(element.type);
+  var isProperty = function isProperty(key) {
+    return key !== "children";
+  };
+  Object.keys(element.props).filter(isProperty).forEach(function (name) {
+    dom[name] = element.props[name];
+  });
+  element.props.children.forEach(function (child) {
+    render(child, dom);
+  });
+  container.appendChild(dom);
+}
 var Bract = {
-  createElement: createElement
+  createElement: createElement,
+  render: render
 };
 
+// 以下注释可以使得 babel 在编译代码的时候，使用我们自定义的 createElement 方法
 /** @jsx Bract.createElement */
 var element = Bract.createElement("div", {
   id: "foo"
-}, Bract.createElement("a", null, "bar"), Bract.createElement("b", null));
-console.log(element);
+}, Bract.createElement("a", {
+  href: "http://www.example.com"
+}, "bar"), Bract.createElement("br", null), Bract.createElement("fakeElement", null, "111"), Bract.createElement("img", {
+  src: "aha.com/fake.jpg",
+  alt: "img"
+}));
+var container = document.getElementById("root");
+Bract.render(element, container);
