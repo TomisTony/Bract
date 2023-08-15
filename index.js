@@ -28,19 +28,176 @@ function createTextElement(text) {
     }
   };
 }
-function render(element, container) {
-  var dom = element.type === "TEXT_ELEMENT" ? document.createTextNode("") // nodeValue 会在下方和其他 props 统一注入
-  : document.createElement(element.type);
+function createDom(fiber) {
+  var dom = fiber.type === "TEXT_ELEMENT" ? document.createTextNode("") // nodeValue 会在下方和其他 props 统一注入
+  : document.createElement(fiber.type);
   var isProperty = function isProperty(key) {
     return key !== "children";
   };
-  Object.keys(element.props).filter(isProperty).forEach(function (name) {
-    dom[name] = element.props[name];
+  Object.keys(fiber.props).filter(isProperty).forEach(function (name) {
+    dom[name] = fiber.props[name];
   });
-  element.props.children.forEach(function (child) {
-    render(child, dom);
+  return dom;
+}
+var isEvent = function isEvent(key) {
+  return key.startsWith("on");
+};
+var isProperty = function isProperty(key) {
+  return key !== "children" && !isEvent(key);
+};
+var isNew = function isNew(prev, next) {
+  return function (key) {
+    return prev[key] !== next[key];
+  };
+};
+var isGone = function isGone(prev, next) {
+  return function (key) {
+    return !(key in next);
+  };
+};
+function updateDom(dom, prevProps, nextProps) {
+  // remove old or changed event listeners
+  Object.keys(prevProps).filter(isEvent).filter(function (key) {
+    return !(key in nextProps) || isNew(prevProps, nextProps)(key);
+  }).forEach(function (name) {
+    var eventType = name.toLowerCase().substring(2); // onClick -> click
+    dom.removeEventListener(eventType, prevProps[name]);
   });
-  container.appendChild(dom);
+
+  // remove old properties
+  Object.keys(prevProps).filter(isProperty).filter(isGone(prevProps, nextProps)).forEach(function (name) {
+    dom[name] = "";
+  });
+
+  // set new or changed properties
+  Object.keys(nextProps).filter(isProperty).filter(isNew(prevProps, nextProps)).forEach(function (name) {
+    dom[name] = nextProps[name];
+  });
+
+  // add event listeners
+  Object.keys(nextProps).filter(isEvent).filter(isNew(prevProps, nextProps)).forEach(function (name) {
+    var eventType = name.toLowerCase().substring(2); // onClick -> click
+    dom.addEventListener(eventType, nextProps[name]);
+  });
+}
+function commitRoot() {
+  deletions.forEach(commitWork);
+  commitWork(wipRoot.child);
+  currentRoot = wipRoot;
+  wipRoot = null;
+}
+function commitWork(fiber) {
+  if (!fiber) {
+    return;
+  }
+  var domParent = fiber.parent.dom;
+  if (fiber.effectTag === "PLACEMENT" && fiber.dom != null) {
+    domParent.appendChild(fiber.dom);
+  } else if (fiber.effectTag === "DELETION") {
+    domParent.removeChild(fiber.dom);
+  } else if (fiber.effectTag === "UPDATE" && fiber.dom != null) {
+    updateDom(fiber.dom, fiber.alternate.props, fiber.props);
+  }
+  commitWork(fiber.child);
+  commitWork(fiber.sibling);
+}
+function render(element, container) {
+  wipRoot = {
+    dom: container,
+    props: {
+      children: [element]
+    },
+    alternate: currentRoot // 用于比较
+  };
+
+  deletions = [];
+  nextUnitOfWork = wipRoot; // 下一个工作单元
+}
+
+var nextUnitOfWork = null;
+var currentRoot = null;
+var wipRoot = null;
+var deletions = null;
+function workLoop(deadline) {
+  var shouldYield = false;
+  while (nextUnitOfWork && !shouldYield) {
+    nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+    shouldYield = deadline.timeRemaining() < 1;
+  }
+  if (!nextUnitOfWork && wipRoot) {
+    commitRoot();
+  }
+  requestIdleCallback(workLoop); // 空闲时间执行任务
+}
+
+function performUnitOfWork(fiber) {
+  // add dom node
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber);
+  }
+  // create new fibers
+  var elements = fiber.props.children;
+  reconcileChildren(fiber, elements);
+  // return next unit of work
+  if (fiber.child) {
+    return fiber.child;
+  }
+  var nextFiber = fiber;
+  while (nextFiber) {
+    if (nextFiber.sibling) {
+      return nextFiber.sibling;
+    }
+    nextFiber = nextFiber.parent;
+  }
+}
+function reconcileChildren(wipFiber, elements) {
+  var index = 0;
+  var oldFiber = wipFiber.alternate && wipFiber.alternate.child; // 用于比较
+  var prevSibling = null;
+  while (index < elements.length || oldFiber != null) {
+    var element = elements[index];
+    var newFiber = null;
+    var sameType = oldFiber && element && element.type === oldFiber.type;
+    if (sameType) {
+      // update the node
+      newFiber = {
+        type: oldFiber.type,
+        props: element.props,
+        dom: oldFiber.dom,
+        // 复用 dom
+        parent: wipFiber,
+        alternate: oldFiber,
+        effectTag: "UPDATE"
+      };
+    }
+    if (element && !sameType) {
+      // add this node
+      newFiber = {
+        type: element.type,
+        props: element.props,
+        dom: null,
+        // 新增 dom
+        parent: wipFiber,
+        alternate: null,
+        effectTag: "PLACEMENT"
+      };
+    }
+    if (oldFiber && !sameType) {
+      // delete the oldFiber's node
+      oldFiber.effectTag = "DELETION";
+      deletions.push(oldFiber);
+    }
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling;
+    }
+    if (index === 0) {
+      wipFiber.child = newFiber;
+    } else if (element) {
+      prevSibling.sibling = newFiber;
+    }
+    prevSibling = newFiber;
+    index++;
+  }
 }
 var Bract = {
   createElement: createElement,
@@ -49,13 +206,22 @@ var Bract = {
 
 // 以下注释可以使得 babel 在编译代码的时候，使用我们自定义的 createElement 方法
 /** @jsx Bract.createElement */
-var element = Bract.createElement("div", {
-  id: "foo"
-}, Bract.createElement("a", {
-  href: "http://www.example.com"
-}, "bar"), Bract.createElement("br", null), Bract.createElement("fakeElement", null, "111"), Bract.createElement("img", {
-  src: "aha.com/fake.jpg",
-  alt: "img"
-}));
-var container = document.getElementById("root");
-Bract.render(element, container);
+
+var updateValue = function updateValue(e) {
+  rerender(e.target.value);
+};
+var rerender = function rerender(value) {
+  var element = Bract.createElement("div", {
+    id: "foo"
+  }, Bract.createElement("a", {
+    href: "http://www.example.com"
+  }, "bar"), Bract.createElement("br", null), Bract.createElement("fakeElement", null, "111"), Bract.createElement("img", {
+    src: "aha.com/fake.jpg",
+    alt: "img"
+  }), Bract.createElement("input", {
+    onInput: updateValue,
+    value: value
+  }), Bract.createElement("h2", null, "Hello ", value));
+  Bract.render(element, document.getElementById("root"));
+};
+rerender("World");
