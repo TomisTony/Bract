@@ -26,13 +26,7 @@ function createDom(fiber) {
       ? document.createTextNode("") // nodeValue 会在下方和其他 props 统一注入
       : document.createElement(fiber.type);
 
-  const isProperty = (key) => key !== "children";
-  Object.keys(fiber.props)
-    .filter(isProperty)
-    .forEach((name) => {
-      dom[name] = fiber.props[name];
-    });
-
+  updateDom(dom, {}, fiber.props);
   return dom;
 }
 
@@ -128,6 +122,8 @@ function workLoop(deadline) {
   }
   requestIdleCallback(workLoop); // 空闲时间执行任务
 }
+
+requestIdleCallback(workLoop)
 
 function performUnitOfWork(fiber) {
   // add dom node

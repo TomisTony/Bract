@@ -31,12 +31,7 @@ function createTextElement(text) {
 function createDom(fiber) {
   var dom = fiber.type === "TEXT_ELEMENT" ? document.createTextNode("") // nodeValue 会在下方和其他 props 统一注入
   : document.createElement(fiber.type);
-  var isProperty = function isProperty(key) {
-    return key !== "children";
-  };
-  Object.keys(fiber.props).filter(isProperty).forEach(function (name) {
-    dom[name] = fiber.props[name];
-  });
+  updateDom(dom, {}, fiber.props);
   return dom;
 }
 var isEvent = function isEvent(key) {
@@ -130,6 +125,7 @@ function workLoop(deadline) {
   requestIdleCallback(workLoop); // 空闲时间执行任务
 }
 
+requestIdleCallback(workLoop);
 function performUnitOfWork(fiber) {
   // add dom node
   if (!fiber.dom) {
