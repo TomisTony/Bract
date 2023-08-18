@@ -1,3 +1,5 @@
+// 这个 createElement 并不是 document.createElement, 而是创建一个虚拟 dom。
+// 实际上 Babel 会通过这个函数自动帮我们转换 JSX 成我们代码中使用的虚拟 DOM
 function createElement(type, props, ...children) {
   return {
     type,
@@ -34,6 +36,7 @@ const isEvent = (key) => key.startsWith("on");
 const isProperty = (key) => key !== "children" && !isEvent(key);
 const isNew = (prev, next) => (key) => prev[key] !== next[key];
 const isGone = (prev, next) => (key) => !(key in next);
+// 这里是更新真实的 Dom
 function updateDom(dom, prevProps, nextProps) {
   // remove old or changed event listeners
   Object.keys(prevProps)
@@ -71,6 +74,7 @@ function updateDom(dom, prevProps, nextProps) {
   );
 }
 
+// 使用当前的 fiber 树构建 dom 树
 function commitRoot() {
   deletions.forEach(commitWork);
   commitWork(wipRoot.child);
@@ -78,6 +82,7 @@ function commitRoot() {
   wipRoot = null;
 }
 
+// 把虚拟 dom 应用到真实 dom
 function commitWork(fiber) {
   if(!fiber) {
     return;
@@ -107,8 +112,8 @@ function render(element, container) {
 }
 
 let nextUnitOfWork = null;
-let currentRoot = null;
-let wipRoot = null;
+let currentRoot = null; // current root fiber
+let wipRoot = null; // work in progress root
 let deletions = null;
 
 function workLoop(deadline) {
@@ -125,6 +130,7 @@ function workLoop(deadline) {
 
 requestIdleCallback(workLoop)
 
+// 用于根据当前的 unitOfWork 构建 fiber 树, 并返回下一个 unitOfWork
 function performUnitOfWork(fiber) {
   // add dom node
   if (!fiber.dom) {
@@ -146,16 +152,19 @@ function performUnitOfWork(fiber) {
   }
 }
 
+// 比较 elements 和上个版本的 fiber 节点 (通过 wipFiber.alternate.child 来获得上个版本的 fiber 节点), 根据比较结果来构建 wipFiber.child
 function reconcileChildren(wipFiber, elements) {
   let index = 0;
-  let oldFiber = wipFiber.alternate && wipFiber.alternate.child; // 用于比较
+  let oldFiber = wipFiber.alternate?.child;
   let prevSibling = null;
   while(index < elements.length || oldFiber != null) {
     const element = elements[index];
     let newFiber = null;
     const sameType = oldFiber && element && element.type === oldFiber.type;
+    // 即使节点本身的 type ，也会走更新逻辑，因为可能 props 变了
     if(sameType) {
       // update the node
+      console.log(oldFiber)
       newFiber = {
         type: oldFiber.type,
         props: element.props,

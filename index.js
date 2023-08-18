@@ -75,12 +75,16 @@ function updateDom(dom, prevProps, nextProps) {
     dom.addEventListener(eventType, nextProps[name]);
   });
 }
+
+// 使用当前的 fiber 树构建 dom 树
 function commitRoot() {
   deletions.forEach(commitWork);
   commitWork(wipRoot.child);
   currentRoot = wipRoot;
   wipRoot = null;
 }
+
+// 把虚拟 dom 应用到真实 dom
 function commitWork(fiber) {
   if (!fiber) {
     return;
@@ -97,6 +101,7 @@ function commitWork(fiber) {
   commitWork(fiber.sibling);
 }
 function render(element, container) {
+  console.log('render');
   wipRoot = {
     dom: container,
     props: {
@@ -110,8 +115,8 @@ function render(element, container) {
 }
 
 var nextUnitOfWork = null;
-var currentRoot = null;
-var wipRoot = null;
+var currentRoot = null; // current root fiber
+var wipRoot = null; // work in progress root
 var deletions = null;
 function workLoop(deadline) {
   var shouldYield = false;
@@ -126,6 +131,8 @@ function workLoop(deadline) {
 }
 
 requestIdleCallback(workLoop);
+
+// 用于根据当前的 unitOfWork 构建 fiber 树, 并返回下一个 unitOfWork
 function performUnitOfWork(fiber) {
   // add dom node
   if (!fiber.dom) {
@@ -146,9 +153,12 @@ function performUnitOfWork(fiber) {
     nextFiber = nextFiber.parent;
   }
 }
+
+// 比较 elements 和  上个版本的 fiber 树, 根据比较结果构建 wipFiber
 function reconcileChildren(wipFiber, elements) {
+  var _wipFiber$alternate;
   var index = 0;
-  var oldFiber = wipFiber.alternate && wipFiber.alternate.child; // 用于比较
+  var oldFiber = (_wipFiber$alternate = wipFiber.alternate) === null || _wipFiber$alternate === void 0 ? void 0 : _wipFiber$alternate.child;
   var prevSibling = null;
   while (index < elements.length || oldFiber != null) {
     var element = elements[index];
@@ -156,6 +166,7 @@ function reconcileChildren(wipFiber, elements) {
     var sameType = oldFiber && element && element.type === oldFiber.type;
     if (sameType) {
       // update the node
+      console.log(oldFiber);
       newFiber = {
         type: oldFiber.type,
         props: element.props,
