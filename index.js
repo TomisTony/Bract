@@ -1,5 +1,11 @@
 "use strict";
 
+function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest(); }
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i]; return arr2; }
+function _iterableToArrayLimit(arr, i) { var _i = null == arr ? null : "undefined" != typeof Symbol && arr[Symbol.iterator] || arr["@@iterator"]; if (null != _i) { var _s, _e, _x, _r, _arr = [], _n = !0, _d = !1; try { if (_x = (_i = _i.call(arr)).next, 0 === i) { if (Object(_i) !== _i) return; _n = !1; } else for (; !(_n = (_s = _x.call(_i)).done) && (_arr.push(_s.value), _arr.length !== i); _n = !0); } catch (err) { _d = !0, _e = err; } finally { try { if (!_n && null != _i["return"] && (_r = _i["return"](), Object(_r) !== _r)) return; } finally { if (_d) throw _e; } } return _arr; } }
+function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
 function _typeof(obj) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (obj) { return typeof obj; } : function (obj) { return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }, _typeof(obj); }
 function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
 function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys(Object(source), !0).forEach(function (key) { _defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
@@ -92,6 +98,7 @@ function commitWork(fiber) {
   if (!fiber) {
     return;
   }
+  // 找到最近的有 dom 的父节点, 因为函数组件没有 dom
   var domParentFiber = fiber.parent;
   while (!domParentFiber.dom) {
     domParentFiber = domParentFiber.parent;
@@ -133,6 +140,9 @@ var nextUnitOfWork = null;
 var currentRoot = null; // current root fiber
 var wipRoot = null; // work in progress root
 var deletions = null;
+var wipFiber = null; // work in progress fiber
+var hookIndex = null; // hook index
+
 function workLoop(deadline) {
   var shouldYield = false;
   while (nextUnitOfWork && !shouldYield) {
@@ -169,6 +179,9 @@ function performUnitOfWork(fiber) {
 }
 function updateFunctionComponent(fiber) {
   // 通过执行函数，获得 children
+  wipFiber = fiber;
+  hookIndex = 0;
+  wipFiber.hooks = [];
   var children = [fiber.type(fiber.props)];
   reconcileChildren(fiber, children);
 }
@@ -192,7 +205,6 @@ function reconcileChildren(wipFiber, elements) {
     // 即使节点本身的 type ，也会走更新逻辑，因为可能 props 变了
     if (sameType) {
       // update the node
-      console.log(oldFiber);
       newFiber = {
         type: oldFiber.type,
         props: element.props,
@@ -232,25 +244,62 @@ function reconcileChildren(wipFiber, elements) {
     index++;
   }
 }
+
+// useState 在每次 render 的时候都会执行，所以我们要做两手准备
+// 如果之前没有执行过 useState，那么我们会进行初始化
+// 如果之前执行过 useState，那么我们根据旧的 state ，并结合用户传入的 action，来获得最新的 state
+function useState(initial) {
+  var oldHook = wipFiber.alternate && wipFiber.alternate.hooks && wipFiber.alternate.hooks[hookIndex];
+  var hook = {
+    state: oldHook ? oldHook.state : initial,
+    queue: []
+  };
+  var actions = oldHook ? oldHook.queue : [];
+  // 这里我们会执行旧版的 actions，来获得最新的 state。
+  // 说是旧版的 actions，实际上这个旧版的 action 是在上一次 render 之后，通过用户的 setState 传入的 action
+  // 等同于说，这里的 actions 就是我们本次渲染希望更改的 state
+  actions.forEach(function (action) {
+    hook.state = action(hook.state);
+  });
+  var setState = function setState(action) {
+    hook.queue.push(action);
+    // 跟 render 一样，启动重新渲染
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot
+    };
+    nextUnitOfWork = wipRoot;
+    deletions = [];
+  };
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+  return [hook.state, setState];
+}
 var Bract = {
   createElement: createElement,
-  render: render
+  render: render,
+  useState: useState
 };
 
 // 以下注释可以使得 babel 在编译代码的时候，使用我们自定义的 createElement 方法
 /** @jsx Bract.createElement */
 
-// const updateValue = e => {
-//   rerender(e.target.value)
-// }
-
-var App = function App() {
-  return Bract.createElement("div", null, "111", Bract.createElement("h1", null, "hello"));
-};
+function Counter() {
+  var _Bract$useState = Bract.useState(1),
+    _Bract$useState2 = _slicedToArray(_Bract$useState, 2),
+    state = _Bract$useState2[0],
+    setState = _Bract$useState2[1];
+  return Bract.createElement("h1", {
+    onClick: function onClick() {
+      return setState(function (c) {
+        return c + 1;
+      });
+    }
+  }, "Count: ", state);
+}
 var rerender = function rerender(value) {
-  var element = Bract.createElement("div", {
-    id: "foo"
-  }, Bract.createElement("h1", null, "aha"), Bract.createElement(App, null));
+  var element = Bract.createElement(Counter, null);
   Bract.render(element, document.getElementById("root"));
 };
 rerender("World");

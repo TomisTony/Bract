@@ -130,6 +130,8 @@ let nextUnitOfWork = null;
 let currentRoot = null; // current root fiber
 let wipRoot = null; // work in progress root
 let deletions = null;
+let wipFiber = null; // work in progress fiber
+let hookIndex = null; // hook index
 
 function workLoop(deadline) {
   let shouldYield = false;
@@ -168,6 +170,9 @@ function performUnitOfWork(fiber) {
 
 function updateFunctionComponent(fiber) {
   // 通过执行函数，获得 children
+  wipFiber = fiber;
+  hookIndex = 0;
+  wipFiber.hooks = [];
   const children = [fiber.type(fiber.props)];
   reconcileChildren(fiber, children);
 }
@@ -191,7 +196,6 @@ function reconcileChildren(wipFiber, elements) {
     // 即使节点本身的 type ，也会走更新逻辑，因为可能 props 变了
     if(sameType) {
       // update the node
-      console.log(oldFiber)
       newFiber = {
         type: oldFiber.type,
         props: element.props,
@@ -230,33 +234,62 @@ function reconcileChildren(wipFiber, elements) {
   }
 }
 
+// useState 在每次 render 的时候都会执行，所以我们要做两手准备
+// 如果之前没有执行过 useState，那么我们会进行初始化
+// 如果之前执行过 useState，那么我们根据旧的 state ，并结合用户传入的 action，来获得最新的 state
+function useState(initial) {
+  const oldHook = 
+    wipFiber.alternate && 
+    wipFiber.alternate.hooks && 
+    wipFiber.alternate.hooks[hookIndex];
+  const hook = {
+    state: oldHook ? oldHook.state : initial,
+    queue: [],
+  }
+  const actions = oldHook ? oldHook.queue : [];
+  // 这里我们会执行旧版的 actions，来获得最新的 state。
+  // 说是旧版的 actions，实际上这个旧版的 action 是在上一次 render 之后，通过用户的 setState 传入的 action
+  // 等同于说，这里的 actions 就是我们本次渲染希望更改的 state
+  actions.forEach(action => {
+    hook.state = action(hook.state);
+  })
+  const setState = action => {
+    hook.queue.push(action);
+    // 跟 render 一样，启动重新渲染
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot,
+    }
+    nextUnitOfWork = wipRoot;
+    deletions = [];
+  }
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+  return [hook.state, setState];
+}
+
 const Bract = {
   createElement,
   render,
+  useState,
 };
 
 // 以下注释可以使得 babel 在编译代码的时候，使用我们自定义的 createElement 方法
 /** @jsx Bract.createElement */
 
-// const updateValue = e => {
-//   rerender(e.target.value)
-// }
-
-const App = () => {
+function Counter() {
+  const [state, setState] = Bract.useState(1);
   return (
-    <div>
-      111
-      <h1>hello</h1>
-    </div>
-  )
+    <h1 onClick={() => setState(c => c + 1)}>
+      Count: {state}
+    </h1>
+  );
 }
 
 const rerender = value => {
   const element = (
-      <div id="foo">
-          <h1>aha</h1>
-          <App />
-      </div>
+    <Counter />
   );
   Bract.render(element, document.getElementById("root"));
 }
