@@ -6,6 +6,8 @@ function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { va
 function _defineProperty(obj, key, value) { key = _toPropertyKey(key); if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 function _toPropertyKey(arg) { var key = _toPrimitive(arg, "string"); return _typeof(key) === "symbol" ? key : String(key); }
 function _toPrimitive(input, hint) { if (_typeof(input) !== "object" || input === null) return input; var prim = input[Symbol.toPrimitive]; if (prim !== undefined) { var res = prim.call(input, hint || "default"); if (_typeof(res) !== "object") return res; throw new TypeError("@@toPrimitive must return a primitive value."); } return (hint === "string" ? String : Number)(input); }
+// 这个 createElement 并不是 document.createElement, 而是创建一个虚拟 dom。
+// 实际上 Babel 会通过这个函数自动帮我们转换 JSX 成我们代码中使用的虚拟 DOM
 function createElement(type, props) {
   for (var _len = arguments.length, children = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
     children[_key - 2] = arguments[_key];
@@ -50,6 +52,7 @@ var isGone = function isGone(prev, next) {
     return !(key in next);
   };
 };
+// 这里是更新真实的 Dom
 function updateDom(dom, prevProps, nextProps) {
   // remove old or changed event listeners
   Object.keys(prevProps).filter(isEvent).filter(function (key) {
@@ -89,19 +92,31 @@ function commitWork(fiber) {
   if (!fiber) {
     return;
   }
-  var domParent = fiber.parent.dom;
+  var domParentFiber = fiber.parent;
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent;
+  }
+  var domParent = domParentFiber.dom;
   if (fiber.effectTag === "PLACEMENT" && fiber.dom != null) {
     domParent.appendChild(fiber.dom);
   } else if (fiber.effectTag === "DELETION") {
-    domParent.removeChild(fiber.dom);
+    commitDeletion(fiber, domParent);
   } else if (fiber.effectTag === "UPDATE" && fiber.dom != null) {
     updateDom(fiber.dom, fiber.alternate.props, fiber.props);
   }
   commitWork(fiber.child);
   commitWork(fiber.sibling);
 }
+
+// 删除节点
+function commitDeletion(fiber, domParent) {
+  if (fiber.dom) {
+    domParent.removeChild(fiber.dom);
+  } else {
+    commitDeletion(fiber.child, domParent);
+  }
+}
 function render(element, container) {
-  console.log('render');
   wipRoot = {
     dom: container,
     props: {
@@ -134,13 +149,12 @@ requestIdleCallback(workLoop);
 
 // 用于根据当前的 unitOfWork 构建 fiber 树, 并返回下一个 unitOfWork
 function performUnitOfWork(fiber) {
-  // add dom node
-  if (!fiber.dom) {
-    fiber.dom = createDom(fiber);
+  var isFunctionComponent = fiber.type instanceof Function;
+  if (isFunctionComponent) {
+    updateFunctionComponent(fiber);
+  } else {
+    updateHostComponent(fiber);
   }
-  // create new fibers
-  var elements = fiber.props.children;
-  reconcileChildren(fiber, elements);
   // return next unit of work
   if (fiber.child) {
     return fiber.child;
@@ -153,8 +167,19 @@ function performUnitOfWork(fiber) {
     nextFiber = nextFiber.parent;
   }
 }
+function updateFunctionComponent(fiber) {
+  // 通过执行函数，获得 children
+  var children = [fiber.type(fiber.props)];
+  reconcileChildren(fiber, children);
+}
+function updateHostComponent(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber);
+  }
+  reconcileChildren(fiber, fiber.props.children);
+}
 
-// 比较 elements 和  上个版本的 fiber 树, 根据比较结果构建 wipFiber
+// 比较 elements 和上个版本的 fiber 节点 (通过 wipFiber.alternate.child 来获得上个版本的 fiber 节点), 根据比较结果来构建 wipFiber.child
 function reconcileChildren(wipFiber, elements) {
   var _wipFiber$alternate;
   var index = 0;
@@ -164,6 +189,7 @@ function reconcileChildren(wipFiber, elements) {
     var element = elements[index];
     var newFiber = null;
     var sameType = oldFiber && element && element.type === oldFiber.type;
+    // 即使节点本身的 type ，也会走更新逻辑，因为可能 props 变了
     if (sameType) {
       // update the node
       console.log(oldFiber);
@@ -214,21 +240,17 @@ var Bract = {
 // 以下注释可以使得 babel 在编译代码的时候，使用我们自定义的 createElement 方法
 /** @jsx Bract.createElement */
 
-var updateValue = function updateValue(e) {
-  rerender(e.target.value);
+// const updateValue = e => {
+//   rerender(e.target.value)
+// }
+
+var App = function App() {
+  return Bract.createElement("div", null, "111", Bract.createElement("h1", null, "hello"));
 };
 var rerender = function rerender(value) {
   var element = Bract.createElement("div", {
     id: "foo"
-  }, Bract.createElement("a", {
-    href: "http://www.example.com"
-  }, "bar"), Bract.createElement("br", null), Bract.createElement("fakeElement", null, "111"), Bract.createElement("img", {
-    src: "aha.com/fake.jpg",
-    alt: "img"
-  }), Bract.createElement("input", {
-    onInput: updateValue,
-    value: value
-  }), Bract.createElement("h2", null, "Hello ", value));
+  }, Bract.createElement("h1", null, "aha"), Bract.createElement(App, null));
   Bract.render(element, document.getElementById("root"));
 };
 rerender("World");

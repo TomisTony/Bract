@@ -87,16 +87,31 @@ function commitWork(fiber) {
   if(!fiber) {
     return;
   }
-  const domParent = fiber.parent.dom;
+  // 找到最近的有 dom 的父节点, 因为函数组件没有 dom
+  let domParentFiber = fiber.parent;
+  while(!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent;
+  }
+  const domParent = domParentFiber.dom;
+
   if(fiber.effectTag === "PLACEMENT" && fiber.dom != null) {
     domParent.appendChild(fiber.dom);
   } else if(fiber.effectTag === "DELETION") {
-    domParent.removeChild(fiber.dom);
+    commitDeletion(fiber, domParent);
   } else if(fiber.effectTag === "UPDATE" && fiber.dom != null) {
     updateDom(fiber.dom, fiber.alternate.props, fiber.props);
   }
   commitWork(fiber.child);
   commitWork(fiber.sibling);
+}
+
+// 删除节点
+function commitDeletion(fiber, domParent) {
+  if(fiber.dom) {
+    domParent.removeChild(fiber.dom);
+  } else {
+    commitDeletion(fiber.child, domParent);
+  }
 }
 
 function render(element, container) {
@@ -132,13 +147,12 @@ requestIdleCallback(workLoop)
 
 // 用于根据当前的 unitOfWork 构建 fiber 树, 并返回下一个 unitOfWork
 function performUnitOfWork(fiber) {
-  // add dom node
-  if (!fiber.dom) {
-    fiber.dom = createDom(fiber);
+  const isFunctionComponent = fiber.type instanceof Function;
+  if(isFunctionComponent) {
+    updateFunctionComponent(fiber);
+  } else {
+    updateHostComponent(fiber);
   }
-  // create new fibers
-  const elements = fiber.props.children;
-  reconcileChildren(fiber, elements);
   // return next unit of work
   if(fiber.child) {
     return fiber.child;
@@ -150,6 +164,19 @@ function performUnitOfWork(fiber) {
     }
     nextFiber = nextFiber.parent;
   }
+}
+
+function updateFunctionComponent(fiber) {
+  // 通过执行函数，获得 children
+  const children = [fiber.type(fiber.props)];
+  reconcileChildren(fiber, children);
+}
+
+function updateHostComponent(fiber) {
+  if(!fiber.dom) {
+    fiber.dom = createDom(fiber);
+  }
+  reconcileChildren(fiber, fiber.props.children);
 }
 
 // 比较 elements 和上个版本的 fiber 节点 (通过 wipFiber.alternate.child 来获得上个版本的 fiber 节点), 根据比较结果来构建 wipFiber.child
@@ -211,19 +238,24 @@ const Bract = {
 // 以下注释可以使得 babel 在编译代码的时候，使用我们自定义的 createElement 方法
 /** @jsx Bract.createElement */
 
-const updateValue = e => {
-  rerender(e.target.value)
+// const updateValue = e => {
+//   rerender(e.target.value)
+// }
+
+const App = () => {
+  return (
+    <div>
+      111
+      <h1>hello</h1>
+    </div>
+  )
 }
 
 const rerender = value => {
   const element = (
       <div id="foo">
-          <a href="http://www.example.com">bar</a>
-          <br />
-          <fakeElement>111</fakeElement>
-          <img src="aha.com/fake.jpg" alt="img"></img>
-          <input onInput={updateValue} value={value} />
-          <h2>Hello {value}</h2>
+          <h1>aha</h1>
+          <App />
       </div>
   );
   Bract.render(element, document.getElementById("root"));
