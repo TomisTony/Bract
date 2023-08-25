@@ -1,11 +1,5 @@
 "use strict";
 
-function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest(); }
-function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
-function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
-function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i]; return arr2; }
-function _iterableToArrayLimit(arr, i) { var _i = null == arr ? null : "undefined" != typeof Symbol && arr[Symbol.iterator] || arr["@@iterator"]; if (null != _i) { var _s, _e, _x, _r, _arr = [], _n = !0, _d = !1; try { if (_x = (_i = _i.call(arr)).next, 0 === i) { if (Object(_i) !== _i) return; _n = !1; } else for (; !(_n = (_s = _x.call(_i)).done) && (_arr.push(_s.value), _arr.length !== i); _n = !0); } catch (err) { _d = !0, _e = err; } finally { try { if (!_n && null != _i["return"] && (_r = _i["return"](), Object(_r) !== _r)) return; } finally { if (_d) throw _e; } } return _arr; } }
-function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
 function _typeof(obj) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (obj) { return typeof obj; } : function (obj) { return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }, _typeof(obj); }
 function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
 function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys(Object(source), !0).forEach(function (key) { _defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
@@ -199,15 +193,15 @@ function reconcileChildren(wipFiber, elements) {
   var oldFiber = (_wipFiber$alternate = wipFiber.alternate) === null || _wipFiber$alternate === void 0 ? void 0 : _wipFiber$alternate.child;
   var prevSibling = null;
   while (index < elements.length || oldFiber != null) {
-    var element = elements[index];
+    var _element = elements[index];
     var newFiber = null;
-    var sameType = oldFiber && element && element.type === oldFiber.type;
-    // 即使节点本身的 type ，也会走更新逻辑，因为可能 props 变了
+    var sameType = oldFiber && _element && _element.type === oldFiber.type;
+    // 即使节点本身的 type 没有改变，也会走更新逻辑，因为可能 props 变了
     if (sameType) {
       // update the node
       newFiber = {
         type: oldFiber.type,
-        props: element.props,
+        props: _element.props,
         dom: oldFiber.dom,
         // 复用 dom
         parent: wipFiber,
@@ -215,11 +209,11 @@ function reconcileChildren(wipFiber, elements) {
         effectTag: "UPDATE"
       };
     }
-    if (element && !sameType) {
+    if (_element && !sameType) {
       // add this node
       newFiber = {
-        type: element.type,
-        props: element.props,
+        type: _element.type,
+        props: _element.props,
         dom: null,
         // 新增 dom
         parent: wipFiber,
@@ -237,7 +231,7 @@ function reconcileChildren(wipFiber, elements) {
     }
     if (index === 0) {
       wipFiber.child = newFiber;
-    } else if (element) {
+    } else if (_element) {
       prevSibling.sibling = newFiber;
     }
     prevSibling = newFiber;
@@ -285,21 +279,19 @@ var Bract = {
 // 以下注释可以使得 babel 在编译代码的时候，使用我们自定义的 createElement 方法
 /** @jsx Bract.createElement */
 
-function Counter() {
-  var _Bract$useState = Bract.useState(1),
-    _Bract$useState2 = _slicedToArray(_Bract$useState, 2),
-    state = _Bract$useState2[0],
-    setState = _Bract$useState2[1];
-  return Bract.createElement("h1", {
-    onClick: function onClick() {
-      return setState(function (c) {
-        return c + 1;
-      });
+var a = function a() {
+  var element = Bract.createElement("div", {
+    onclick: function onclick() {
+      return a();
     }
-  }, "Count: ", state);
-}
-var rerender = function rerender(value) {
-  var element = Bract.createElement(Counter, null);
-  Bract.render(element, document.getElementById("root"));
+  }, "111 444");
+  var container = document.getElementById("root");
+  Bract.render(element, container);
 };
-rerender("World");
+var element = Bract.createElement("div", {
+  onclick: function onclick() {
+    return a();
+  }
+}, "111 222 333");
+var container = document.getElementById("root");
+Bract.render(element, container);

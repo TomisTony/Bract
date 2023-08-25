@@ -76,6 +76,7 @@ function updateDom(dom, prevProps, nextProps) {
 
 // 使用当前的 fiber 树构建 dom 树
 function commitRoot() {
+  // 这里需要对删除的节点做单独操作是因为新的 fiber 树中没有这些节点了
   deletions.forEach(commitWork);
   commitWork(wipRoot.child);
   currentRoot = wipRoot;
@@ -193,7 +194,7 @@ function reconcileChildren(wipFiber, elements) {
     const element = elements[index];
     let newFiber = null;
     const sameType = oldFiber && element && element.type === oldFiber.type;
-    // 即使节点本身的 type ，也会走更新逻辑，因为可能 props 变了
+    // 即使节点本身的 type 没有改变，也会走更新逻辑，因为可能 props 变了
     if(sameType) {
       // update the node
       newFiber = {
@@ -205,6 +206,8 @@ function reconcileChildren(wipFiber, elements) {
         effectTag: "UPDATE",
       }
     }
+    // 这里注意，如果几个子节点中间的一个节点被删了，那么每个节点对应的老节点都会被标记删除
+    // 然后每一个后续的子节点都会走 PLACEMENT 逻辑。这就是没有 key 的后果
     if(element && !sameType) {
       // add this node
       newFiber = {
@@ -278,20 +281,12 @@ const Bract = {
 // 以下注释可以使得 babel 在编译代码的时候，使用我们自定义的 createElement 方法
 /** @jsx Bract.createElement */
 
-function Counter() {
-  const [state, setState] = Bract.useState(1);
-  return (
-    <h1 onClick={() => setState(c => c + 1)}>
-      Count: {state}
-    </h1>
-  );
-}
+const a = () => {
+  const element = <div onclick={() => a()}>111 444</div>;
+  const container = document.getElementById("root");
+  Bract.render(element, container);
+};
 
-const rerender = value => {
-  const element = (
-    <Counter />
-  );
-  Bract.render(element, document.getElementById("root"));
-}
-
-rerender("World");
+const element = <div onclick={() => a()}>111 222 333</div>;
+const container = document.getElementById("root");
+Bract.render(element, container);
